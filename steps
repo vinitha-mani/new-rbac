@@ -1,0 +1,109 @@
+create a user and add the user in wheel group(redhat or centos) / in admin group(ubuntu)
+
+Generate the Private Key
+openssl genrsa -out user1.key 4096
+
+Generate the CSR
+openssl req -new -key user1.key -out user1.csr -subj "/CN=user1/O=dev-team"
+
+CN (Common Name): The name of the user (user1)
+O (Organization): The group to which the user belongs (dev-team)
+
+Submit and Approve the CSR in Kubernetes
+Create a CSR Object in Kubernetes
+
+cat <<EOF | kubectl apply -f -
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: user1-csr
+spec:
+  request: $(cat user1.csr | base64 | tr -d '\n')
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - client auth
+EOF
+
+Approve the CSR
+kubectl certificate approve user1-csr
+
+Retrieve the Certificate
+kubectl get csr user1-csr -o jsonpath='{.status.certificate}' | base64 --decode > user1.crt
+
+Inspect Validity Dates - Look for the fields notBefore and notAfter, which indicate the certificate's validity range.
+kubectl get csr <csr-name> -o jsonpath='{.spec.request}' | base64 --decode | openssl req -text -noout
+
+Configure RBAC to define new role with "modify" permission
+kubectl api-resources | grep -iE 'role|KIND'
+
+Create a Role
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: dev-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+EOF
+
+kubectl -n (if any) describe role <role name>
+
+Create a Role Binding
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-role-binding
+  namespace: default
+subjects:
+- kind: User
+  name: user1
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: dev-role
+  apiGroup: rbac.authorization.k8s.io
+EOF
+
+Adding the User to the Kubeconfig File
+
+Add the User Configuration
+kubectl config set-credentials user1 --client-certificate=user1.crt --client-key=user1.key  (command adds the user1 credentials to the kubeconfig file)
+
+Add the Cluster Information
+kubectl config set-cluster my-cluster --server=https://<api-server-url> --certificate-authority=/path/to/ca.crt   (command adds the cluster information to the kubeconfig file)
+
+the api-server-url can be obtained using the below command 
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
+or 
+by checking the kube config file (~/.kube/config)
+clusters:
+- cluster:
+    server: https://<your-cluster-api-server-url>
+
+Create a Context for the User
+kubectl config set-context user1-context --cluster=my-cluster --namespace=default --user=user1
+
+kubectl auth can-i create pods --context=<context-name>
+kubectl auth can-i create service --context=<context-name>
+
+Use the Context
+kubectl config get-contexts 
+kubectl config use-context user1-context
+
+Test the User’s Access
+kubectl get pods
+kubectl delete pod <pod-name>
+kubectl auth can-i create service
+kubectl auth can-i get pods 
+kubectl auth can-i list deployment
+
+
+
+
+
+
+
