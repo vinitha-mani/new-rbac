@@ -1,0 +1,37 @@
+RBAC policies define which users or groups can access specific Kubernetes resources and the actions they are allowed to perform on those resources.
+
+The RBAC process involves three steps: 
+	Authentication, 
+	Authorization, and 
+	Admission control
+
+Authentication
+Authentication is the process of verifying the identity of a user or entity. 
+There are three types of entities in Kubernetes: 
+	A user (which is usually a human), 
+	A group (which is usually a set of humans), and 
+	A service account (which is used by pods inside the cluster)
+
+We know already that Kubernetes supports a number of different authentication providers, including:
+
+HTTP Basic Authentication (largely deprecated)
+x509 client certificates
+Static token files on the host
+Cloud authentication providers like Azure Active Directory and AWS Identity and Access Management (IAM)
+Authentication webhooks
+
+Following are the brief steps required to create a user account:
+
+Create a private/public key pair
+Create a Certificate Signing Request
+Sign the Certificate
+Create kubernetes configuration file that uses these keys to access the cluster
+Create an RBAC role
+Create an RBAC role binding
+Let's start working on these steps.
+
+Users need to be created using X.509 certificates signed by the cluster CA, which can be done through CSRs and certificate issuing.
+
+Pods that are running inside the cluster don’t need a certificate. Instead, a service account can be assigned to them.
+When you create a pod without specifying any account for it, the “default” service account is automatically assigned to the pod.
+User accounts are also available for processes that run inside pods. You don’t create an X.509 certificate for them; instead, you link pod and user accounts, which is typically done in manifest files.
